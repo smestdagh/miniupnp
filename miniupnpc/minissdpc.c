@@ -3,7 +3,7 @@
  * Project : miniupnp
  * Web : http://miniupnp.free.fr/
  * Author : Thomas BERNARD
- * copyright (c) 2005-2018 Thomas Bernard
+ * copyright (c) 2005-2019 Thomas Bernard
  * This software is subjet to the conditions detailed in the
  * provided LICENCE file. */
 /*#include <syslog.h>*/
@@ -381,6 +381,7 @@ free_tmp_and_return:
  * the last 4 arguments are filled during the parsing :
  *    - location/locationsize : "location:" field of the SSDP reply packet
  *    - st/stsize : "st:" field of the SSDP reply packet.
+ *    - usn/usnsize : "usn:" filed of the SSDP reply packet
  * The strings are NOT null terminated */
 static void
 parseMSEARCHReply(const char * reply, int size,
@@ -418,17 +419,17 @@ parseMSEARCHReply(const char * reply, int size,
 					putchar('\n');*/
 					/* skip the colon and white spaces */
 					do { b++; } while(reply[b]==' ');
-					if(0==strncasecmp(reply+a, "location", 8))
+					if(0==strncasecmp(reply+a, "location:", 9))
 					{
 						*location = reply+b;
 						*locationsize = i-b;
 					}
-					else if(0==strncasecmp(reply+a, "st", 2))
+					else if(0==strncasecmp(reply+a, "st:", 3))
 					{
 						*st = reply+b;
 						*stsize = i-b;
 					}
-					else if(0==strncasecmp(reply+a, "usn", 3))
+					else if(0==strncasecmp(reply+a, "usn:", 4))
 					{
 						*usn = reply+b;
 						*usnsize = i-b;
@@ -471,7 +472,7 @@ ssdpDiscoverDevices(const char * const deviceTypes[],
                     int searchalltypes)
 {
 	struct UPNPDev * tmp;
-	struct UPNPDev * devlist = 0;
+	struct UPNPDev * devlist = NULL;
 	unsigned int scope_id = 0;
 	int opt = 1;
 	static const char MSearchMsgFmt[] =
@@ -583,8 +584,7 @@ ssdpDiscoverDevices(const char * const deviceTypes[],
 					pUnicast = pCurrAddresses->FirstUnicastAddress;
 					if (pUnicast != NULL) {
 						for (i = 0; pUnicast != NULL; i++) {
-							IPAddr.S_un.S_addr = (u_long) pUnicast->Address;
-							printf("\tIP Address[%d]:     \t%s\n", i, inet_ntoa(IPAddr) );
+							printf("\tIP Address[%d]:     \t%s\n", i, inet_ntoa(((PSOCKADDR_IN)pUnicast->Address.lpSockaddr)->sin_addr) );
 							pUnicast = pUnicast->Next;
 						}
 						printf("\tNumber of Unicast Addresses: %d\n", i);
@@ -592,8 +592,7 @@ ssdpDiscoverDevices(const char * const deviceTypes[],
 					pAnycast = pCurrAddresses->FirstAnycastAddress;
 					if (pAnycast) {
 						for (i = 0; pAnycast != NULL; i++) {
-							IPAddr.S_un.S_addr = (u_long) pAnyCast->Address;
-							printf("\tAnycast Address[%d]:     \t%s\n", i, inet_ntoa(IPAddr) );
+							printf("\tAnycast Address[%d]:     \t%s\n", i, inet_ntoa(((PSOCKADDR_IN)pAnycast->Address.lpSockaddr)->sin_addr) );
 							pAnycast = pAnycast->Next;
 						}
 						printf("\tNumber of Anycast Addresses: %d\n", i);
@@ -601,8 +600,8 @@ ssdpDiscoverDevices(const char * const deviceTypes[],
 					pMulticast = pCurrAddresses->FirstMulticastAddress;
 					if (pMulticast) {
 						for (i = 0; pMulticast != NULL; i++) {
-							IPAddr.S_un.S_addr = (u_long) pMultiCast->Address;
-							printf("\tMulticast Address[%d]:     \t%s\n", i, inet_ntoa(IPAddr) );
+							printf("\tMulticast Address[%d]:     \t%s\n", i, inet_ntoa(((PSOCKADDR_IN)pMulticast->Address.lpSockaddr)->sin_addr) );
+              pMulticast = pMulticast->Next;
 						}
 					}
 					printf("\n");
@@ -642,7 +641,7 @@ ssdpDiscoverDevices(const char * const deviceTypes[],
 		if(error)
 			*error = MINISSDPC_SOCKET_ERROR;
 		PRINT_SOCKET_ERROR("setsockopt(SO_REUSEADDR,...)");
-		return NULL;
+		goto error;
 	}
 
 	if(ipv6) {
@@ -824,7 +823,7 @@ ssdpDiscoverDevices(const char * const deviceTypes[],
 			if (n < 0) {
 #ifdef DEBUG
 				char hbuf[NI_MAXHOST], sbuf[NI_MAXSERV];
-				if (getnameinfo(p->ai_addr, p->ai_addrlen, hbuf, sizeof(hbuf), sbuf,
+				if (getnameinfo(p->ai_addr, (socklen_t)p->ai_addrlen, hbuf, sizeof(hbuf), sbuf,
 				                sizeof(sbuf), NI_NUMERICHOST | NI_NUMERICSERV) == 0) {
 					fprintf(stderr, "host:%s port:%s\n", hbuf, sbuf);
 				}
